@@ -11,8 +11,8 @@ export class Ant {
   constructor(scene: Phaser.Scene, x: number, y: number, player: Player) {
     this.player = player
 
-    // Create red 24x24 square for ant
-    this.sprite = scene.add.rectangle(x, y, 24, 24, 0xff0000)
+    // Create 24x24 square for ant (design spec color: #bc4749)
+    this.sprite = scene.add.rectangle(x, y, 24, 24, 0xbc4749)
 
     // Enable physics
     scene.physics.add.existing(this.sprite)

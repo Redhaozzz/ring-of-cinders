@@ -23,8 +23,8 @@ export class AntHill {
     this.player = player
     this.onAntSpawned = onAntSpawned
 
-    // Create dark red/brown 48x48 square for anthill
-    this.sprite = scene.add.rectangle(x, y, 48, 48, 0x8b0000)
+    // Create 48x48 square for anthill (design spec color: #bc4749)
+    this.sprite = scene.add.rectangle(x, y, 48, 48, 0xbc4749)
 
     // Enable physics
     scene.physics.add.existing(this.sprite)
