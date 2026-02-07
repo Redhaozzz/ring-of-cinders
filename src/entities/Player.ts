@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { EffectsManager } from '../effects/VisualEffects'
 
 type Direction = 'up' | 'down' | 'left' | 'right'
 
@@ -25,9 +26,11 @@ export class Player {
   private isDead: boolean = false
   private invulnerableTimer: number = 0
   private readonly INVULNERABLE_DURATION: number = 1.0 // seconds
+  private effectsManager: EffectsManager | null = null
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, effectsManager?: EffectsManager) {
     this.scene = scene
+    this.effectsManager = effectsManager || null
 
     // Create white 32x32 square
     this.sprite = scene.add.rectangle(x, y, 32, 32, 0xffffff)
@@ -136,27 +139,38 @@ export class Player {
     // Calculate arc direction based on facing direction
     let startAngle: number
     let endAngle: number
+    let centerAngle: number
 
     switch (this.facing) {
       case 'up':
         startAngle = Phaser.Math.DegToRad(-135) // -135 degrees
         endAngle = Phaser.Math.DegToRad(-45)    // -45 degrees
+        centerAngle = Phaser.Math.DegToRad(-90) // -90 degrees (up)
         break
       case 'down':
         startAngle = Phaser.Math.DegToRad(45)   // 45 degrees
         endAngle = Phaser.Math.DegToRad(135)    // 135 degrees
+        centerAngle = Phaser.Math.DegToRad(90)  // 90 degrees (down)
         break
       case 'left':
         startAngle = Phaser.Math.DegToRad(135)  // 135 degrees
         endAngle = Phaser.Math.DegToRad(225)    // 225 degrees
+        centerAngle = Phaser.Math.DegToRad(180) // 180 degrees (left)
         break
       case 'right':
         startAngle = Phaser.Math.DegToRad(-45)  // -45 degrees
         endAngle = Phaser.Math.DegToRad(45)     // 45 degrees
+        centerAngle = Phaser.Math.DegToRad(0)   // 0 degrees (right)
         break
       default:
         startAngle = 0
         endAngle = 0
+        centerAngle = 0
+    }
+
+    // Add slash visual effect
+    if (this.effectsManager) {
+      this.effectsManager.addSlash(this.scene, this.sprite.x, this.sprite.y, centerAngle, this.ATTACK_RADIUS)
     }
 
     // Create attack arc using Graphics

@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { Ant } from './Ant'
 import type { Player } from './Player'
+import { EffectsManager } from '../effects/VisualEffects'
 
 export class AntHill {
   private scene: Phaser.Scene
@@ -11,17 +12,20 @@ export class AntHill {
   private spawnTimer: number = 0
   private readonly SPAWN_INTERVAL: number = 2.5 // seconds (2-3 seconds)
   private onAntSpawned?: (ant: Ant) => void
+  private effectsManager: EffectsManager | null = null
 
   constructor(
     scene: Phaser.Scene,
     x: number,
     y: number,
     player: Player,
-    onAntSpawned?: (ant: Ant) => void
+    onAntSpawned?: (ant: Ant) => void,
+    effectsManager?: EffectsManager
   ) {
     this.scene = scene
     this.player = player
     this.onAntSpawned = onAntSpawned
+    this.effectsManager = effectsManager || null
 
     // Create 48x48 square for anthill (design spec color: #bc4749)
     this.sprite = scene.add.rectangle(x, y, 48, 48, 0xbc4749)
@@ -52,7 +56,7 @@ export class AntHill {
     const spawnX = this.sprite.x + Math.cos(angle) * distance
     const spawnY = this.sprite.y + Math.sin(angle) * distance
 
-    const ant = new Ant(this.scene, spawnX, spawnY, this.player)
+    const ant = new Ant(this.scene, spawnX, spawnY, this.player, this.effectsManager || undefined)
 
     // Notify parent scene about new ant
     if (this.onAntSpawned) {
@@ -77,7 +81,16 @@ export class AntHill {
 
   private die() {
     this.isDead = true
-    this.sprite.destroy()
+
+    if (this.effectsManager) {
+      // Add death effect and destroy sprite when effect completes
+      this.effectsManager.addDeath(this.sprite.scene, this.sprite, () => {
+        this.sprite.destroy()
+      })
+    } else {
+      // Fallback: destroy immediately if no effects manager
+      this.sprite.destroy()
+    }
   }
 
   getSprite(): Phaser.GameObjects.Rectangle {

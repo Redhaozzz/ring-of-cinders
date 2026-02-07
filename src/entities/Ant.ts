@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import type { Player } from './Player'
+import { EffectsManager } from '../effects/VisualEffects'
 
 export class Ant {
   private sprite: Phaser.GameObjects.Rectangle
@@ -7,9 +8,11 @@ export class Ant {
   private speed: number = 160 // 0.8 * player speed (200)
   private player: Player
   private isDead: boolean = false
+  private effectsManager: EffectsManager | null = null
 
-  constructor(scene: Phaser.Scene, x: number, y: number, player: Player) {
+  constructor(scene: Phaser.Scene, x: number, y: number, player: Player, effectsManager?: EffectsManager) {
     this.player = player
+    this.effectsManager = effectsManager || null
 
     // Create 24x24 square for ant (design spec color: #bc4749)
     this.sprite = scene.add.rectangle(x, y, 24, 24, 0xbc4749)
@@ -59,7 +62,16 @@ export class Ant {
 
   private die() {
     this.isDead = true
-    this.sprite.destroy()
+
+    if (this.effectsManager) {
+      // Add death effect and destroy sprite when effect completes
+      this.effectsManager.addDeath(this.sprite.scene, this.sprite, () => {
+        this.sprite.destroy()
+      })
+    } else {
+      // Fallback: destroy immediately if no effects manager
+      this.sprite.destroy()
+    }
   }
 
   getSprite(): Phaser.GameObjects.Rectangle {

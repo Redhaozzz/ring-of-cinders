@@ -4,6 +4,7 @@ import { Brick } from '../entities/Brick'
 import { Ant } from '../entities/Ant'
 import { AntHill } from '../entities/AntHill'
 import { EnclosureDetector, type GridPosition, type EnclosureResult } from '../systems/EnclosureDetector'
+import { EffectsManager } from '../effects/VisualEffects'
 
 export class GameScene extends Phaser.Scene {
   private player!: Player
@@ -22,6 +23,9 @@ export class GameScene extends Phaser.Scene {
   private furnaceDamageTimer: number = 0
   private readonly FURNACE_DAMAGE_INTERVAL: number = 1.0 // seconds
 
+  // Effects system
+  private effectsManager!: EffectsManager
+
   // UI
   private hpText!: Phaser.GameObjects.Text
   private gameOverText: Phaser.GameObjects.Text | null = null
@@ -35,13 +39,16 @@ export class GameScene extends Phaser.Scene {
     // Enable physics
     this.physics.world.setBounds(0, 0, this.game.config.width as number, this.game.config.height as number)
 
+    // Initialize effects manager
+    this.effectsManager = new EffectsManager(this)
+
     // Initialize enclosure detector with game dimensions
     const gameWidth = this.game.config.width as number
     const gameHeight = this.game.config.height as number
     this.enclosureDetector = new EnclosureDetector(gameWidth, gameHeight, 32)
 
     // Create player in center of screen
-    this.player = new Player(this, 400, 300)
+    this.player = new Player(this, 400, 300, this.effectsManager)
 
     // Enable physics on player
     this.player.enablePhysics()
@@ -295,7 +302,7 @@ export class GameScene extends Phaser.Scene {
           undefined,
           this
         )
-      })
+      }, this.effectsManager)
       this.antHills.push(antHill)
 
       // Add collision between player and anthill
