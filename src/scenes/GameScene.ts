@@ -1,11 +1,15 @@
 import Phaser from 'phaser'
 import { Player } from '../entities/Player'
 import { Brick } from '../entities/Brick'
+import { Ant } from '../entities/Ant'
+import { AntHill } from '../entities/AntHill'
 import { EnclosureDetector, type GridPosition, type EnclosureResult } from '../systems/EnclosureDetector'
 
 export class GameScene extends Phaser.Scene {
   private player!: Player
   private bricks: Brick[] = []
+  private ants: Ant[] = []
+  private antHills: AntHill[] = []
   private kKey!: Phaser.Input.Keyboard.Key
   private brickCooldown: number = 0
   private readonly MAX_BRICKS = 8
@@ -17,6 +21,11 @@ export class GameScene extends Phaser.Scene {
   private activeEnclosures: EnclosureResult | null = null
   private furnaceDamageTimer: number = 0
   private readonly FURNACE_DAMAGE_INTERVAL: number = 1.0 // seconds
+
+  // UI
+  private hpText!: Phaser.GameObjects.Text
+  private gameOverText: Phaser.GameObjects.Text | null = null
+  private gameState: 'playing' | 'won' | 'lost' = 'playing'
 
   constructor() {
     super({ key: 'GameScene' })
@@ -48,9 +57,21 @@ export class GameScene extends Phaser.Scene {
         }
       }
     })
+
+    // Create HP display
+    this.hpText = this.add.text(16, 16, '', {
+      fontSize: '24px',
+      color: '#ffffff'
+    })
+    this.updateHpDisplay()
+
+    // Spawn initial anthills at map edges
+    this.spawnInitialAntHills()
   }
 
   update(_time: number, delta: number) {
+    if (this.gameState !== 'playing') return
+
     this.player.update()
 
     // Convert delta to seconds and update brick cooldown
@@ -66,6 +87,28 @@ export class GameScene extends Phaser.Scene {
       this.placeBrick()
     }
 
+    // Update anthills
+    for (const antHill of this.antHills) {
+      antHill.update(delta)
+    }
+
+    // Update ants
+    for (const ant of this.ants) {
+      ant.update(deltaSeconds)
+    }
+
+    // Clean up dead ants
+    this.ants = this.ants.filter(ant => !ant.getIsDead())
+
+    // Clean up dead anthills
+    this.antHills = this.antHills.filter(antHill => !antHill.getIsDead())
+
+    // Check ant-player collision
+    this.checkAntPlayerCollision()
+
+    // Handle sword attack damage
+    this.checkSwordAttackDamage()
+
     // Handle furnace damage tick
     if (this.activeEnclosures?.hasEnclosure) {
       this.furnaceDamageTimer += deltaSeconds
@@ -74,6 +117,12 @@ export class GameScene extends Phaser.Scene {
         this.processFurnaceDamage()
       }
     }
+
+    // Update HP display
+    this.updateHpDisplay()
+
+    // Check win/lose conditions
+    this.checkGameOver()
   }
 
   private placeBrick() {
@@ -191,13 +240,162 @@ export class GameScene extends Phaser.Scene {
   private processFurnaceDamage() {
     if (!this.activeEnclosures?.hasEnclosure) return
 
-    // Log damage for each enclosed cell (placeholder for future enemy system)
-    console.log('🔥 Furnace damage tick! Affecting', this.activeEnclosures.enclosedCells.length, 'cells')
+    const enclosedCells = this.activeEnclosures.enclosedCells
 
-    // Debug: Print some enclosed cell positions
-    const sampleCells = this.activeEnclosures.enclosedCells.slice(0, 3)
-    for (const cell of sampleCells) {
-      console.log(`   - Damage at (${Math.round(cell.x)}, ${Math.round(cell.y)})`)
+    // Damage ants in enclosed area
+    for (const ant of this.ants) {
+      const antPos = ant.getPosition()
+      const isEnclosed = enclosedCells.some(cell =>
+        Math.abs(cell.x - antPos.x) < 16 && Math.abs(cell.y - antPos.y) < 16
+      )
+
+      if (isEnclosed) {
+        ant.takeDamage(1)
+      }
     }
+
+    // Damage anthills in enclosed area
+    for (const antHill of this.antHills) {
+      const hillPos = antHill.getPosition()
+      const isEnclosed = enclosedCells.some(cell =>
+        Math.abs(cell.x - hillPos.x) < 24 && Math.abs(cell.y - hillPos.y) < 24
+      )
+
+      if (isEnclosed) {
+        antHill.takeDamage(1)
+      }
+    }
+  }
+
+  /**
+   * Spawn initial anthills at map edges
+   */
+  private spawnInitialAntHills() {
+    const gameWidth = this.game.config.width as number
+    const gameHeight = this.game.config.height as number
+    const margin = 80
+
+    // Spawn 2-3 anthills at random edge positions
+    const hillCount = 3
+    const positions: { x: number, y: number }[] = [
+      { x: margin, y: margin }, // Top-left
+      { x: gameWidth - margin, y: margin }, // Top-right
+      { x: gameWidth / 2, y: gameHeight - margin } // Bottom-center
+    ]
+
+    for (let i = 0; i < hillCount; i++) {
+      const pos = positions[i]
+      const antHill = new AntHill(this, pos.x, pos.y, this.player, (ant: Ant) => {
+        this.ants.push(ant)
+        // Add collision with player
+        this.physics.add.overlap(
+          this.player.getSprite(),
+          ant.getSprite(),
+          () => {},
+          undefined,
+          this
+        )
+      })
+      this.antHills.push(antHill)
+
+      // Add collision between player and anthill
+      this.physics.add.collider(this.player.getSprite(), antHill.getSprite())
+    }
+  }
+
+  /**
+   * Check ant-player collision and apply damage
+   */
+  private checkAntPlayerCollision() {
+    const playerSprite = this.player.getSprite()
+    const playerBounds = playerSprite.getBounds()
+
+    for (const ant of this.ants) {
+      const antSprite = ant.getSprite()
+      const antBounds = antSprite.getBounds()
+
+      if (Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, antBounds)) {
+        this.player.takeDamage(1)
+        // Kill the ant after it damages the player
+        ant.takeDamage(999)
+      }
+    }
+  }
+
+  /**
+   * Check sword attack damage to ants
+   */
+  private checkSwordAttackDamage() {
+    const attackInfo = this.player.getAttackInfo()
+    if (!attackInfo) return
+
+    const { x, y, radius, startAngle, endAngle } = attackInfo
+
+    for (const ant of this.ants) {
+      const antPos = ant.getPosition()
+      const dx = antPos.x - x
+      const dy = antPos.y - y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+
+      if (distance <= radius) {
+        // Check if ant is within the arc angle
+        let angle = Math.atan2(dy, dx)
+
+        // Normalize angles to handle wrapping
+        let start = startAngle
+        let end = endAngle
+        if (end < start) end += Math.PI * 2
+        if (angle < start) angle += Math.PI * 2
+
+        if (angle >= start && angle <= end) {
+          ant.takeDamage(1)
+        }
+      }
+    }
+  }
+
+  /**
+   * Update HP display
+   */
+  private updateHpDisplay() {
+    const hp = this.player.getHp()
+    const maxHp = this.player.getMaxHp()
+    this.hpText.setText(`HP: ${hp}/${maxHp}`)
+  }
+
+  /**
+   * Check game over conditions
+   */
+  private checkGameOver() {
+    // Check lose condition
+    if (this.player.getIsDead()) {
+      this.gameState = 'lost'
+      this.showGameOver(false)
+      return
+    }
+
+    // Check win condition
+    if (this.antHills.length === 0 && this.gameState === 'playing') {
+      this.gameState = 'won'
+      this.showGameOver(true)
+    }
+  }
+
+  /**
+   * Show game over message
+   */
+  private showGameOver(won: boolean) {
+    const gameWidth = this.game.config.width as number
+    const gameHeight = this.game.config.height as number
+
+    const message = won ? 'VICTORY!\nAll anthills destroyed!' : 'DEFEAT!\nYou were overwhelmed...'
+    const color = won ? '#00ff00' : '#ff0000'
+
+    this.gameOverText = this.add.text(gameWidth / 2, gameHeight / 2, message, {
+      fontSize: '48px',
+      color: color,
+      align: 'center'
+    })
+    this.gameOverText.setOrigin(0.5)
   }
 }

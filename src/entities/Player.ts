@@ -20,6 +20,11 @@ export class Player {
   private readonly ATTACK_COOLDOWN_TIME: number = 0.4 // seconds
   private readonly ATTACK_DURATION: number = 0.2 // seconds
   private readonly ATTACK_RADIUS: number = 60 // pixels
+  private hp: number = 3
+  private maxHp: number = 3
+  private isDead: boolean = false
+  private invulnerableTimer: number = 0
+  private readonly INVULNERABLE_DURATION: number = 1.0 // seconds
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene
@@ -57,6 +62,22 @@ export class Player {
   update() {
     const delta = this.scene.game.loop.delta / 1000 // Convert to seconds
     const body = this.sprite.body as Phaser.Physics.Arcade.Body | null
+
+    if (this.isDead) {
+      if (body) body.setVelocity(0, 0)
+      return
+    }
+
+    // Update invulnerability timer
+    if (this.invulnerableTimer > 0) {
+      this.invulnerableTimer -= delta
+      // Blinking effect: toggle alpha
+      const blinkRate = 0.1
+      const alpha = (Math.floor(this.invulnerableTimer / blinkRate) % 2 === 0) ? 0.3 : 1.0
+      this.sprite.setAlpha(alpha)
+    } else {
+      this.sprite.setAlpha(1.0)
+    }
 
     let velocityX = 0
     let velocityY = 0
@@ -162,5 +183,82 @@ export class Player {
 
   getFacing(): Direction {
     return this.facing
+  }
+
+  /**
+   * Take damage and return true if player died
+   */
+  takeDamage(amount: number): boolean {
+    if (this.isDead || this.invulnerableTimer > 0) return false
+
+    this.hp -= amount
+    if (this.hp <= 0) {
+      this.hp = 0
+      this.die()
+      return true
+    }
+
+    // Start invulnerability period
+    this.invulnerableTimer = this.INVULNERABLE_DURATION
+
+    return false
+  }
+
+  private die() {
+    this.isDead = true
+    this.sprite.setAlpha(0.5)
+  }
+
+  getHp(): number {
+    return this.hp
+  }
+
+  getMaxHp(): number {
+    return this.maxHp
+  }
+
+  getIsDead(): boolean {
+    return this.isDead
+  }
+
+  /**
+   * Get attack arc info for collision detection
+   */
+  getAttackInfo(): { isAttacking: boolean, x: number, y: number, radius: number, startAngle: number, endAngle: number } | null {
+    if (!this.attackArc) return null
+
+    let startAngle: number
+    let endAngle: number
+
+    switch (this.facing) {
+      case 'up':
+        startAngle = Phaser.Math.DegToRad(-135)
+        endAngle = Phaser.Math.DegToRad(-45)
+        break
+      case 'down':
+        startAngle = Phaser.Math.DegToRad(45)
+        endAngle = Phaser.Math.DegToRad(135)
+        break
+      case 'left':
+        startAngle = Phaser.Math.DegToRad(135)
+        endAngle = Phaser.Math.DegToRad(225)
+        break
+      case 'right':
+        startAngle = Phaser.Math.DegToRad(-45)
+        endAngle = Phaser.Math.DegToRad(45)
+        break
+      default:
+        startAngle = 0
+        endAngle = 0
+    }
+
+    return {
+      isAttacking: true,
+      x: this.sprite.x,
+      y: this.sprite.y,
+      radius: this.ATTACK_RADIUS,
+      startAngle,
+      endAngle
+    }
   }
 }
