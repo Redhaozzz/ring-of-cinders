@@ -5,6 +5,7 @@ import { Ant } from '../entities/Ant'
 import { AntHill } from '../entities/AntHill'
 import { EnclosureDetector, type GridPosition, type EnclosureResult } from '../systems/EnclosureDetector'
 import { EffectsManager } from '../effects/VisualEffects'
+import { AudioManager } from '../systems/AudioManager'
 
 export class GameScene extends Phaser.Scene {
   private player!: Player
@@ -12,6 +13,8 @@ export class GameScene extends Phaser.Scene {
   private ants: Ant[] = []
   private antHills: AntHill[] = []
   private kKey!: Phaser.Input.Keyboard.Key
+  private rKey!: Phaser.Input.Keyboard.Key
+  private escKey!: Phaser.Input.Keyboard.Key
   private brickCooldown: number = 0
   private readonly MAX_BRICKS = 8
   private readonly BRICK_COOLDOWN_TIME: number = 0.8 // seconds
@@ -26,10 +29,16 @@ export class GameScene extends Phaser.Scene {
   // Effects system
   private effectsManager!: EffectsManager
 
+  // Audio system
+  private audioManager!: AudioManager
+
   // UI
   private hpText!: Phaser.GameObjects.Text
   private gameOverText: Phaser.GameObjects.Text | null = null
+  private restartHintText: Phaser.GameObjects.Text | null = null
+  private pausedText: Phaser.GameObjects.Text | null = null
   private gameState: 'playing' | 'won' | 'lost' = 'playing'
+  private isPaused: boolean = false
 
   constructor() {
     super({ key: 'GameScene' })
@@ -41,6 +50,9 @@ export class GameScene extends Phaser.Scene {
 
     // Initialize effects manager
     this.effectsManager = new EffectsManager(this)
+
+    // Initialize audio manager
+    this.audioManager = new AudioManager(this)
 
     // Initialize enclosure detector with game dimensions
     const gameWidth = this.game.config.width as number
@@ -55,6 +67,12 @@ export class GameScene extends Phaser.Scene {
 
     // Setup K key for placing bricks
     this.kKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.K)
+
+    // Setup R key for restart
+    this.rKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R)
+
+    // Setup ESC key for pause
+    this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
 
     // Setup mouse input for brick placement
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -77,7 +95,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
-    if (this.gameState !== 'playing') return
+    // Handle restart key
+    if (Phaser.Input.Keyboard.JustDown(this.rKey) && this.gameState !== 'playing') {
+      this.restartGame()
+      return
+    }
+
+    // Handle pause key
+    if (Phaser.Input.Keyboard.JustDown(this.escKey) && this.gameState === 'playing') {
+      this.togglePause()
+      return
+    }
+
+    // Skip game logic if paused or game over
+    if (this.isPaused || this.gameState !== 'playing') return
 
     this.player.update()
 
@@ -323,6 +354,7 @@ export class GameScene extends Phaser.Scene {
 
       if (Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, antBounds)) {
         this.player.takeDamage(1)
+        this.audioManager.playHurt()
         // Kill the ant after it damages the player
         ant.takeDamage(999)
       }
@@ -356,6 +388,7 @@ export class GameScene extends Phaser.Scene {
 
         if (angle >= start && angle <= end) {
           ant.takeDamage(1)
+          this.audioManager.playAttack()
         }
       }
     }
@@ -404,5 +437,53 @@ export class GameScene extends Phaser.Scene {
       align: 'center'
     })
     this.gameOverText.setOrigin(0.5)
+
+    // Show restart hint
+    this.restartHintText = this.add.text(gameWidth / 2, gameHeight / 2 + 80, 'Press R to Restart', {
+      fontSize: '24px',
+      color: '#ffffff'
+    })
+    this.restartHintText.setOrigin(0.5)
+
+    // Play corresponding sound
+    if (won) {
+      this.audioManager.playVictory()
+    } else {
+      this.audioManager.playDefeat()
+    }
+  }
+
+  /**
+   * Restart the game scene
+   */
+  private restartGame() {
+    this.scene.restart()
+  }
+
+  /**
+   * Toggle pause state
+   */
+  private togglePause() {
+    this.isPaused = !this.isPaused
+
+    const gameWidth = this.game.config.width as number
+    const gameHeight = this.game.config.height as number
+
+    if (this.isPaused) {
+      // Show paused text
+      this.pausedText = this.add.text(gameWidth / 2, gameHeight / 2, 'PAUSED', {
+        fontSize: '64px',
+        color: '#ffffff',
+        backgroundColor: '#000000',
+        padding: { x: 30, y: 20 }
+      })
+      this.pausedText.setOrigin(0.5)
+    } else {
+      // Remove paused text
+      if (this.pausedText) {
+        this.pausedText.destroy()
+        this.pausedText = null
+      }
+    }
   }
 }
