@@ -12,13 +12,14 @@ export class Player {
     S: Phaser.Input.Keyboard.Key
     D: Phaser.Input.Keyboard.Key
   }
-  private spaceKey: Phaser.Input.Keyboard.Key
+  private jKey: Phaser.Input.Keyboard.Key
   private speed: number = 200
   private facing: Direction = 'down'
-  private attackBox: Phaser.GameObjects.Rectangle | null = null
+  private attackArc: Phaser.GameObjects.Graphics | null = null
   private attackCooldown: number = 0
-  private readonly ATTACK_COOLDOWN_TIME: number = 0.5 // seconds
+  private readonly ATTACK_COOLDOWN_TIME: number = 0.4 // seconds
   private readonly ATTACK_DURATION: number = 0.2 // seconds
+  private readonly ATTACK_RADIUS: number = 60 // pixels
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene
@@ -34,7 +35,16 @@ export class Player {
       S: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       D: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D)
     }
-    this.spaceKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
+    this.jKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J)
+
+    // Setup mouse input for attack
+    scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.leftButtonDown()) {
+        if (this.attackCooldown <= 0) {
+          this.attack()
+        }
+      }
+    })
   }
 
   enablePhysics() {
@@ -92,8 +102,8 @@ export class Player {
       this.attackCooldown -= delta
     }
 
-    // Handle attack input
-    if (Phaser.Input.Keyboard.JustDown(this.spaceKey) && this.attackCooldown <= 0) {
+    // Handle attack input (J key or mouse left click)
+    if (Phaser.Input.Keyboard.JustDown(this.jKey) && this.attackCooldown <= 0) {
       this.attack()
     }
   }
@@ -102,48 +112,55 @@ export class Player {
     // Set cooldown
     this.attackCooldown = this.ATTACK_COOLDOWN_TIME
 
-    // Calculate attack box position based on facing direction
-    let attackX = this.sprite.x
-    let attackY = this.sprite.y
-    let attackWidth = 32
-    let attackHeight = 16
+    // Calculate arc direction based on facing direction
+    let startAngle: number
+    let endAngle: number
 
     switch (this.facing) {
       case 'up':
-        attackY = this.sprite.y - 24 // 16 (half player) + 8 (half attack height)
-        attackWidth = 32
-        attackHeight = 16
+        startAngle = Phaser.Math.DegToRad(-135) // -135 degrees
+        endAngle = Phaser.Math.DegToRad(-45)    // -45 degrees
         break
       case 'down':
-        attackY = this.sprite.y + 24
-        attackWidth = 32
-        attackHeight = 16
+        startAngle = Phaser.Math.DegToRad(45)   // 45 degrees
+        endAngle = Phaser.Math.DegToRad(135)    // 135 degrees
         break
       case 'left':
-        attackX = this.sprite.x - 24
-        attackWidth = 16
-        attackHeight = 32
+        startAngle = Phaser.Math.DegToRad(135)  // 135 degrees
+        endAngle = Phaser.Math.DegToRad(225)    // 225 degrees
         break
       case 'right':
-        attackX = this.sprite.x + 24
-        attackWidth = 16
-        attackHeight = 32
+        startAngle = Phaser.Math.DegToRad(-45)  // -45 degrees
+        endAngle = Phaser.Math.DegToRad(45)     // 45 degrees
         break
+      default:
+        startAngle = 0
+        endAngle = 0
     }
 
-    // Create attack hitbox
-    this.attackBox = this.scene.add.rectangle(attackX, attackY, attackWidth, attackHeight, 0xff0000)
+    // Create attack arc using Graphics
+    this.attackArc = this.scene.add.graphics()
+    this.attackArc.fillStyle(0xff0000, 0.5) // Semi-transparent red
+    this.attackArc.beginPath()
+    this.attackArc.moveTo(this.sprite.x, this.sprite.y)
+    this.attackArc.arc(this.sprite.x, this.sprite.y, this.ATTACK_RADIUS, startAngle, endAngle, false)
+    this.attackArc.closePath()
+    this.attackArc.fillPath()
 
-    // Remove attack box after duration
+    // Remove attack arc after duration
     this.scene.time.delayedCall(this.ATTACK_DURATION * 1000, () => {
-      if (this.attackBox) {
-        this.attackBox.destroy()
-        this.attackBox = null
+      if (this.attackArc) {
+        this.attackArc.destroy()
+        this.attackArc = null
       }
     })
   }
 
   getSprite(): Phaser.GameObjects.Rectangle {
     return this.sprite
+  }
+
+  getFacing(): Direction {
+    return this.facing
   }
 }
