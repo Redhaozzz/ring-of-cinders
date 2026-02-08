@@ -5,7 +5,7 @@ import { EffectsManager } from '../effects/VisualEffects'
 
 export class AntHill {
   private scene: Phaser.Scene
-  private sprite: Phaser.GameObjects.Rectangle
+  private sprite: Phaser.GameObjects.Sprite
   private hp: number = 10
   private isDead: boolean = false
   private player: Player
@@ -27,13 +27,17 @@ export class AntHill {
     this.onAntSpawned = onAntSpawned
     this.effectsManager = effectsManager || null
 
-    // Create 48x48 square for anthill (design spec color: #bc4749)
-    this.sprite = scene.add.rectangle(x, y, 48, 48, 0xbc4749)
+    // Create anthill sprite using anthill-states spritesheet
+    // Scale from 256px to ~48px (scale = 0.1875)
+    this.sprite = scene.add.sprite(x, y, 'anthill-states', 0)
+    this.sprite.setScale(0.1875)
 
     // Enable physics
     scene.physics.add.existing(this.sprite)
     const body = this.sprite.body as Phaser.Physics.Arcade.Body
     body.setImmovable(true)
+    // Adjust physics body size to match scaled sprite (~48px)
+    body.setSize(256, 256)
   }
 
   update(delta: number) {
@@ -76,7 +80,31 @@ export class AntHill {
       this.die()
       return true
     }
+
+    // Update visual based on new HP
+    this.updateVisual()
     return false
+  }
+
+  /**
+   * Update sprite frame based on current HP
+   * Frame 0: Full HP (8-10)
+   * Frame 1: Damaged (5-7)
+   * Frame 2: Heavily damaged (2-4)
+   * Frame 3: Nearly destroyed (1)
+   */
+  private updateVisual(): void {
+    let frame: number
+    if (this.hp >= 8) {
+      frame = 0
+    } else if (this.hp >= 5) {
+      frame = 1
+    } else if (this.hp >= 2) {
+      frame = 2
+    } else {
+      frame = 3
+    }
+    this.sprite.setFrame(frame)
   }
 
   private die() {
@@ -93,7 +121,7 @@ export class AntHill {
     }
   }
 
-  getSprite(): Phaser.GameObjects.Rectangle {
+  getSprite(): Phaser.GameObjects.Sprite {
     return this.sprite
   }
 

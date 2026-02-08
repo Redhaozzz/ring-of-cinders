@@ -68,11 +68,30 @@ export class GameScene extends Phaser.Scene {
       frameWidth: 341,
       frameHeight: 1024
     })
+
+    // Ground tiles: 4x4 grid (256x256 per frame)
+    this.load.spritesheet('ground-tiles', 'assets/sprites/ground-tiles.png', {
+      frameWidth: 256,
+      frameHeight: 256
+    })
+
+    // Anthill states: 4 frames horizontally (256x256 per frame)
+    this.load.spritesheet('anthill-states', 'assets/sprites/anthill-states.png', {
+      frameWidth: 256,
+      frameHeight: 256
+    })
   }
 
   create() {
     // Enable physics
     this.physics.world.setBounds(0, 0, this.game.config.width as number, this.game.config.height as number)
+
+    // Create grass background using ground tiles (frame 0)
+    const bgWidth = this.game.config.width as number
+    const bgHeight = this.game.config.height as number
+    const groundTile = this.add.tileSprite(0, 0, bgWidth, bgHeight, 'ground-tiles', 0)
+    groundTile.setOrigin(0, 0)
+    groundTile.setDepth(-1)
 
     // Create animations
     this.createAnimations()
