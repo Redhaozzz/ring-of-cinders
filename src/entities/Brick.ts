@@ -1,14 +1,15 @@
 import Phaser from 'phaser'
 
 export class Brick {
-  private sprite: Phaser.GameObjects.Rectangle
+  private sprite: Phaser.GameObjects.Sprite
   private isGlowing: boolean = false
-  private readonly NORMAL_COLOR: number = 0x888888
-  private readonly GLOW_COLOR: number = 0xff6600
+  private readonly NORMAL_FRAME: number = 0
+  private readonly BURNING_FRAME: number = 2
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    // Create gray 32x32 square
-    this.sprite = scene.add.rectangle(x, y, 32, 32, this.NORMAL_COLOR)
+    // Create sprite from spritesheet (starts with normal state)
+    this.sprite = scene.add.sprite(x, y, 'brick', this.NORMAL_FRAME)
+    this.sprite.setScale(0.03125) // Scale down from 341x1024 to approximately 32x32 (32/1024 ≈ 0.03125)
 
     // Enable physics on the brick
     scene.physics.add.existing(this.sprite)
@@ -16,7 +17,7 @@ export class Brick {
     body.setImmovable(true)
   }
 
-  getSprite(): Phaser.GameObjects.Rectangle {
+  getSprite(): Phaser.GameObjects.Sprite {
     return this.sprite
   }
 
@@ -35,11 +36,11 @@ export class Brick {
 
     this.isGlowing = glowing
     if (glowing) {
-      // Orange/red glow for furnace mode
-      this.sprite.setFillStyle(this.GLOW_COLOR)
+      // Switch to burning frame for furnace mode
+      this.sprite.setFrame(this.BURNING_FRAME)
     } else {
-      // Reset to normal gray
-      this.sprite.setFillStyle(this.NORMAL_COLOR)
+      // Reset to normal frame
+      this.sprite.setFrame(this.NORMAL_FRAME)
     }
   }
 

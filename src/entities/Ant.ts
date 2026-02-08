@@ -3,7 +3,7 @@ import type { Player } from './Player'
 import { EffectsManager } from '../effects/VisualEffects'
 
 export class Ant {
-  private sprite: Phaser.GameObjects.Rectangle
+  private sprite: Phaser.GameObjects.Sprite
   private hp: number = 2
   private speed: number = 160 // 0.8 * player speed (200)
   private player: Player
@@ -14,8 +14,10 @@ export class Ant {
     this.player = player
     this.effectsManager = effectsManager || null
 
-    // Create 24x24 square for ant (design spec color: #bc4749)
-    this.sprite = scene.add.rectangle(x, y, 24, 24, 0xbc4749)
+    // Create sprite from spritesheet
+    this.sprite = scene.add.sprite(x, y, 'ant', 0)
+    this.sprite.setScale(0.09375) // Scale down from 256x256 to 24x24 (24/256 = 0.09375)
+    this.sprite.play('ant-walk')
 
     // Enable physics
     scene.physics.add.existing(this.sprite)
@@ -63,6 +65,9 @@ export class Ant {
   private die() {
     this.isDead = true
 
+    // Play death animation
+    this.sprite.play('ant-death')
+
     if (this.effectsManager) {
       // Add death effect and destroy sprite when effect completes
       this.effectsManager.addDeath(this.sprite.scene, this.sprite, () => {
@@ -74,7 +79,7 @@ export class Ant {
     }
   }
 
-  getSprite(): Phaser.GameObjects.Rectangle {
+  getSprite(): Phaser.GameObjects.Sprite {
     return this.sprite
   }
 

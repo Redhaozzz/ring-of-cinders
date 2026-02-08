@@ -44,9 +44,36 @@ export class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' })
   }
 
+  preload() {
+    // Load sprite sheets (each 1024x1024, divided by 64 = 16x16 frames)
+    // Since sheets are 1024x1024 and visual style is 16x16 pixels, each frame would be 64x64 in the sheet
+    // But looking at the actual sprites, they appear to use larger frames
+
+    // Firekeeper: 4x4 grid (256x256 per frame)
+    this.load.spritesheet('firekeeper', 'assets/sprites/firekeeper-sprite-sheet.png', {
+      frameWidth: 256,
+      frameHeight: 256
+    })
+
+    // Ant enemy: 4x3 grid (256x256 per frame)
+    this.load.spritesheet('ant', 'assets/sprites/ant-enemy-sprite-sheet.png', {
+      frameWidth: 256,
+      frameHeight: 256
+    })
+
+    // Sealing brick: 3 states horizontally (341x1024 per frame, approximately)
+    this.load.spritesheet('brick', 'assets/sprites/sealing-brick-states.png', {
+      frameWidth: 341,
+      frameHeight: 1024
+    })
+  }
+
   create() {
     // Enable physics
     this.physics.world.setBounds(0, 0, this.game.config.width as number, this.game.config.height as number)
+
+    // Create animations
+    this.createAnimations()
 
     // Initialize effects manager
     this.effectsManager = new EffectsManager(this)
@@ -458,6 +485,66 @@ export class GameScene extends Phaser.Scene {
    */
   private restartGame() {
     this.scene.restart()
+  }
+
+  /**
+   * Create sprite animations
+   */
+  private createAnimations() {
+    // Firekeeper animations (4x4 grid = 16 frames)
+    // Assuming: row 1 = idle/walk down, row 2 = walk left, row 3 = walk right, row 4 = walk up
+    // Frames 0-3 = down, 4-7 = left, 8-11 = right, 12-15 = up
+
+    this.anims.create({
+      key: 'firekeeper-idle-down',
+      frames: this.anims.generateFrameNumbers('firekeeper', { start: 0, end: 0 }),
+      frameRate: 1,
+      repeat: -1
+    })
+
+    this.anims.create({
+      key: 'firekeeper-walk-down',
+      frames: this.anims.generateFrameNumbers('firekeeper', { start: 0, end: 3 }),
+      frameRate: 10,
+      repeat: -1
+    })
+
+    this.anims.create({
+      key: 'firekeeper-walk-left',
+      frames: this.anims.generateFrameNumbers('firekeeper', { start: 4, end: 7 }),
+      frameRate: 10,
+      repeat: -1
+    })
+
+    this.anims.create({
+      key: 'firekeeper-walk-right',
+      frames: this.anims.generateFrameNumbers('firekeeper', { start: 8, end: 11 }),
+      frameRate: 10,
+      repeat: -1
+    })
+
+    this.anims.create({
+      key: 'firekeeper-walk-up',
+      frames: this.anims.generateFrameNumbers('firekeeper', { start: 12, end: 15 }),
+      frameRate: 10,
+      repeat: -1
+    })
+
+    // Ant animations (4x3 grid = 12 frames)
+    // Assuming: first 2 rows = walk animation, last row = death animation
+    this.anims.create({
+      key: 'ant-walk',
+      frames: this.anims.generateFrameNumbers('ant', { start: 0, end: 7 }),
+      frameRate: 10,
+      repeat: -1
+    })
+
+    this.anims.create({
+      key: 'ant-death',
+      frames: this.anims.generateFrameNumbers('ant', { start: 8, end: 11 }),
+      frameRate: 10,
+      repeat: 0
+    })
   }
 
   /**

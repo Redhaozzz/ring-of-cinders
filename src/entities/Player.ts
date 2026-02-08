@@ -5,7 +5,7 @@ type Direction = 'up' | 'down' | 'left' | 'right'
 
 export class Player {
   private scene: Phaser.Scene
-  private sprite: Phaser.GameObjects.Rectangle
+  private sprite: Phaser.GameObjects.Sprite
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys
   private wasdKeys: {
     W: Phaser.Input.Keyboard.Key
@@ -32,8 +32,10 @@ export class Player {
     this.scene = scene
     this.effectsManager = effectsManager || null
 
-    // Create white 32x32 square
-    this.sprite = scene.add.rectangle(x, y, 32, 32, 0xffffff)
+    // Create sprite from spritesheet
+    this.sprite = scene.add.sprite(x, y, 'firekeeper', 0)
+    this.sprite.setScale(0.125) // Scale down from 256x256 to 32x32 (32/256 = 0.125)
+    this.sprite.play('firekeeper-idle-down')
 
     // Setup input
     this.cursors = scene.input.keyboard!.createCursorKeys()
@@ -86,20 +88,56 @@ export class Player {
     let velocityY = 0
 
     // Check for input (WASD or Arrow keys)
+    let isMoving = false
     if (this.cursors.left.isDown || this.wasdKeys.A.isDown) {
       velocityX = -this.speed
       this.facing = 'left'
+      isMoving = true
     } else if (this.cursors.right.isDown || this.wasdKeys.D.isDown) {
       velocityX = this.speed
       this.facing = 'right'
+      isMoving = true
     }
 
     if (this.cursors.up.isDown || this.wasdKeys.W.isDown) {
       velocityY = -this.speed
       this.facing = 'up'
+      isMoving = true
     } else if (this.cursors.down.isDown || this.wasdKeys.S.isDown) {
       velocityY = this.speed
       this.facing = 'down'
+      isMoving = true
+    }
+
+    // Update animation based on movement and facing direction
+    if (isMoving) {
+      switch (this.facing) {
+        case 'up':
+          if (this.sprite.anims.currentAnim?.key !== 'firekeeper-walk-up') {
+            this.sprite.play('firekeeper-walk-up')
+          }
+          break
+        case 'down':
+          if (this.sprite.anims.currentAnim?.key !== 'firekeeper-walk-down') {
+            this.sprite.play('firekeeper-walk-down')
+          }
+          break
+        case 'left':
+          if (this.sprite.anims.currentAnim?.key !== 'firekeeper-walk-left') {
+            this.sprite.play('firekeeper-walk-left')
+          }
+          break
+        case 'right':
+          if (this.sprite.anims.currentAnim?.key !== 'firekeeper-walk-right') {
+            this.sprite.play('firekeeper-walk-right')
+          }
+          break
+      }
+    } else {
+      // Idle animation
+      if (this.sprite.anims.currentAnim?.key !== 'firekeeper-idle-down') {
+        this.sprite.play('firekeeper-idle-down')
+      }
     }
 
     // Apply movement using physics or direct position
@@ -191,7 +229,7 @@ export class Player {
     })
   }
 
-  getSprite(): Phaser.GameObjects.Rectangle {
+  getSprite(): Phaser.GameObjects.Sprite {
     return this.sprite
   }
 
