@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import type { Player } from './Player'
 import { EffectsManager } from '../effects/VisualEffects'
+import { AudioManager } from '../systems/AudioManager'
 
 export class Ant {
   private sprite: Phaser.GameObjects.Sprite
@@ -9,10 +10,19 @@ export class Ant {
   private player: Player
   private isDead: boolean = false
   private effectsManager: EffectsManager | null = null
+  private audioManager: AudioManager | null = null
 
-  constructor(scene: Phaser.Scene, x: number, y: number, player: Player, effectsManager?: EffectsManager) {
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    player: Player,
+    effectsManager?: EffectsManager,
+    audioManager?: AudioManager
+  ) {
     this.player = player
     this.effectsManager = effectsManager || null
+    this.audioManager = audioManager || null
 
     // Create sprite from spritesheet
     this.sprite = scene.add.sprite(x, y, 'ant', 0)
@@ -64,6 +74,11 @@ export class Ant {
 
   private die() {
     this.isDead = true
+
+    // Play death sound
+    if (this.audioManager) {
+      this.audioManager.playAntDeath()
+    }
 
     // Play death animation
     this.sprite.play('ant-death')

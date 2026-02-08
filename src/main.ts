@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { MenuScene } from './scenes/MenuScene'
 import { GameScene } from './scenes/GameScene'
+import { SettingsScene } from './scenes/SettingsScene'
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -15,7 +16,7 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false
     }
   },
-  scene: [MenuScene, GameScene]
+  scene: [MenuScene, GameScene, SettingsScene]
 }
 
 new Phaser.Game(config)

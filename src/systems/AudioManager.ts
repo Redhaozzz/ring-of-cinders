@@ -1,5 +1,7 @@
 import Phaser from 'phaser'
 
+const VOLUME_STORAGE_KEY = 'roc-volume'
+
 /**
  * AudioManager handles all game sound effects using Web Audio API
  * Generates simple procedural sounds for attack, hurt, victory, and defeat
@@ -7,9 +9,24 @@ import Phaser from 'phaser'
 export class AudioManager {
   private audioContext: AudioContext
   private masterVolume: number = 0.3
+  private bgmGainNode: GainNode | null = null
+  private bgmOscillators: OscillatorNode[] = []
+  private isBgmPlaying: boolean = false
 
   constructor(_scene: Phaser.Scene) {
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    // Load saved volume from localStorage
+    this.loadVolume()
+  }
+
+  /**
+   * Load volume from localStorage
+   */
+  private loadVolume() {
+    const saved = localStorage.getItem(VOLUME_STORAGE_KEY)
+    if (saved !== null) {
+      this.masterVolume = Phaser.Math.Clamp(parseFloat(saved), 0, 1)
+    }
   }
 
   /**
@@ -189,16 +206,162 @@ export class AudioManager {
   }
 
   /**
+   * Play ant death sound - short squish/crunch
+   */
+  playAntDeath() {
+    // Main squish sound
+    const squishSound = this.audioContext.createOscillator()
+    const squishGain = this.audioContext.createGain()
+
+    squishSound.connect(squishGain)
+    squishGain.connect(this.audioContext.destination)
+
+    squishSound.type = 'square'
+    squishSound.frequency.setValueAtTime(400, this.audioContext.currentTime)
+    squishSound.frequency.exponentialRampToValueAtTime(100, this.audioContext.currentTime + 0.08)
+
+    squishGain.gain.setValueAtTime(this.masterVolume * 0.25, this.audioContext.currentTime)
+    squishGain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.08)
+
+    squishSound.start(this.audioContext.currentTime)
+    squishSound.stop(this.audioContext.currentTime + 0.08)
+
+    // Add a small pop
+    const popSound = this.audioContext.createOscillator()
+    const popGain = this.audioContext.createGain()
+
+    popSound.connect(popGain)
+    popGain.connect(this.audioContext.destination)
+
+    popSound.type = 'sine'
+    popSound.frequency.setValueAtTime(600, this.audioContext.currentTime + 0.02)
+    popSound.frequency.exponentialRampToValueAtTime(200, this.audioContext.currentTime + 0.06)
+
+    popGain.gain.setValueAtTime(this.masterVolume * 0.15, this.audioContext.currentTime + 0.02)
+    popGain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.06)
+
+    popSound.start(this.audioContext.currentTime + 0.02)
+    popSound.stop(this.audioContext.currentTime + 0.06)
+  }
+
+  /**
+   * Start background music - ambient loop
+   */
+  playBGM() {
+    if (this.isBgmPlaying) return
+
+    this.isBgmPlaying = true
+
+    // Create main gain node for BGM
+    this.bgmGainNode = this.audioContext.createGain()
+    this.bgmGainNode.gain.setValueAtTime(this.masterVolume * 0.15, this.audioContext.currentTime)
+    this.bgmGainNode.connect(this.audioContext.destination)
+
+    // Create ambient drone using low frequency oscillators
+    const createDrone = (frequency: number, type: OscillatorType, detune: number = 0) => {
+      const osc = this.audioContext.createOscillator()
+      const gain = this.audioContext.createGain()
+
+      osc.type = type
+      osc.frequency.value = frequency
+      osc.detune.value = detune
+
+      // Subtle LFO modulation for movement
+      const lfo = this.audioContext.createOscillator()
+      const lfoGain = this.audioContext.createGain()
+      lfo.type = 'sine'
+      lfo.frequency.value = 0.1 + Math.random() * 0.1
+      lfoGain.gain.value = 2
+
+      lfo.connect(lfoGain)
+      lfoGain.connect(osc.frequency)
+
+      gain.gain.value = 0.3
+      osc.connect(gain)
+      gain.connect(this.bgmGainNode!)
+
+      osc.start()
+      lfo.start()
+
+      this.bgmOscillators.push(osc, lfo)
+      return osc
+    }
+
+    // Create layered ambient sound
+    // Low drone
+    createDrone(55, 'sine', 0)       // A1
+    createDrone(55, 'triangle', 5)   // A1 slightly detuned
+
+    // Mid layer
+    createDrone(110, 'sine', -3)     // A2
+
+    // High shimmer (very quiet)
+    const shimmer = this.audioContext.createOscillator()
+    const shimmerGain = this.audioContext.createGain()
+    shimmer.type = 'sine'
+    shimmer.frequency.value = 440
+    shimmerGain.gain.value = 0.05
+    shimmer.connect(shimmerGain)
+    shimmerGain.connect(this.bgmGainNode!)
+    shimmer.start()
+    this.bgmOscillators.push(shimmer)
+
+    // Add slow tremolo to shimmer
+    const tremolo = this.audioContext.createOscillator()
+    const tremoloGain = this.audioContext.createGain()
+    tremolo.type = 'sine'
+    tremolo.frequency.value = 2
+    tremoloGain.gain.value = 0.03
+    tremolo.connect(tremoloGain)
+    tremoloGain.connect(shimmerGain.gain)
+    tremolo.start()
+    this.bgmOscillators.push(tremolo)
+  }
+
+  /**
+   * Stop background music
+   */
+  stopBGM() {
+    if (!this.isBgmPlaying) return
+
+    this.isBgmPlaying = false
+
+    // Fade out before stopping
+    if (this.bgmGainNode) {
+      this.bgmGainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.5)
+    }
+
+    // Stop all oscillators after fade
+    setTimeout(() => {
+      this.bgmOscillators.forEach(osc => {
+        try {
+          osc.stop()
+        } catch (_e) {
+          // Already stopped
+        }
+      })
+      this.bgmOscillators = []
+      this.bgmGainNode = null
+    }, 600)
+  }
+
+  /**
    * Set master volume (0.0 to 1.0)
    */
   setVolume(volume: number) {
     this.masterVolume = Phaser.Math.Clamp(volume, 0, 1)
+
+    // Update BGM volume if playing
+    if (this.bgmGainNode && this.isBgmPlaying) {
+      this.bgmGainNode.gain.setValueAtTime(this.masterVolume * 0.15, this.audioContext.currentTime)
+    }
   }
 
   /**
    * Clean up resources
    */
   destroy() {
+    this.stopBGM()
     if (this.audioContext.state !== 'closed') {
       this.audioContext.close()
     }

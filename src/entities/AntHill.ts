@@ -8,10 +8,11 @@ export class AntHill {
   private scene: Phaser.Scene
   private sprite: Phaser.GameObjects.Sprite
   private hp: number = 10
+  private maxHp: number = 10
   private isDead: boolean = false
   private player: Player
   private spawnTimer: number = 0
-  private readonly SPAWN_INTERVAL: number = 2.5 // seconds (2-3 seconds)
+  private spawnInterval: number = 2.5 // seconds (2-3 seconds)
   private onAntSpawned?: (ant: Ant) => void
   private effectsManager: EffectsManager | null = null
   private audioManager: AudioManager | null = null
@@ -23,13 +24,20 @@ export class AntHill {
     player: Player,
     onAntSpawned?: (ant: Ant) => void,
     effectsManager?: EffectsManager,
-    audioManager?: AudioManager
+    audioManager?: AudioManager,
+    spawnIntervalMultiplier: number = 1.0,
+    hpMultiplier: number = 1.0
   ) {
     this.scene = scene
     this.player = player
     this.onAntSpawned = onAntSpawned
     this.effectsManager = effectsManager || null
     this.audioManager = audioManager || null
+
+    // Apply difficulty multipliers
+    this.spawnInterval = 2.5 * spawnIntervalMultiplier
+    this.maxHp = Math.round(10 * hpMultiplier)
+    this.hp = this.maxHp
 
     // Create anthill sprite using anthill-states spritesheet
     // Scale from 256px to ~48px (scale = 0.1875)
@@ -51,7 +59,7 @@ export class AntHill {
     const deltaSeconds = delta / 1000
     this.spawnTimer += deltaSeconds
 
-    if (this.spawnTimer >= this.SPAWN_INTERVAL) {
+    if (this.spawnTimer >= this.spawnInterval) {
       this.spawnTimer = 0
       this.spawnAnt()
     }
@@ -64,7 +72,14 @@ export class AntHill {
     const spawnX = this.sprite.x + Math.cos(angle) * distance
     const spawnY = this.sprite.y + Math.sin(angle) * distance
 
-    const ant = new Ant(this.scene, spawnX, spawnY, this.player, this.effectsManager || undefined)
+    const ant = new Ant(
+      this.scene,
+      spawnX,
+      spawnY,
+      this.player,
+      this.effectsManager || undefined,
+      this.audioManager || undefined
+    )
 
     // Notify parent scene about new ant
     if (this.onAntSpawned) {
@@ -91,19 +106,20 @@ export class AntHill {
   }
 
   /**
-   * Update sprite frame based on current HP
-   * Frame 0: Full HP (8-10)
-   * Frame 1: Damaged (5-7)
-   * Frame 2: Heavily damaged (2-4)
-   * Frame 3: Nearly destroyed (1)
+   * Update sprite frame based on current HP percentage
+   * Frame 0: Full HP (>= 80%)
+   * Frame 1: Damaged (50-79%)
+   * Frame 2: Heavily damaged (20-49%)
+   * Frame 3: Nearly destroyed (< 20%)
    */
   private updateVisual(): void {
+    const hpPercent = this.hp / this.maxHp
     let frame: number
-    if (this.hp >= 8) {
+    if (hpPercent >= 0.8) {
       frame = 0
-    } else if (this.hp >= 5) {
+    } else if (hpPercent >= 0.5) {
       frame = 1
-    } else if (this.hp >= 2) {
+    } else if (hpPercent >= 0.2) {
       frame = 2
     } else {
       frame = 3

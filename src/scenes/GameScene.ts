@@ -6,6 +6,7 @@ import { AntHill } from '../entities/AntHill'
 import { EnclosureDetector, type GridPosition, type EnclosureResult } from '../systems/EnclosureDetector'
 import { EffectsManager } from '../effects/VisualEffects'
 import { AudioManager } from '../systems/AudioManager'
+import type { Difficulty, GameConfig } from './MenuScene'
 
 export class GameScene extends Phaser.Scene {
   private player!: Player
@@ -39,11 +40,23 @@ export class GameScene extends Phaser.Scene {
   private hpText!: Phaser.GameObjects.Text
   private brickCountText!: Phaser.GameObjects.Text
   private cooldownText!: Phaser.GameObjects.Text
+  private timerText!: Phaser.GameObjects.Text
   private gameOverText: Phaser.GameObjects.Text | null = null
   private restartHintText: Phaser.GameObjects.Text | null = null
+  private menuHintText: Phaser.GameObjects.Text | null = null
   private pausedText: Phaser.GameObjects.Text | null = null
+  private pauseMenuButton: Phaser.GameObjects.Text | null = null
   private gameState: 'playing' | 'won' | 'lost' = 'playing'
   private isPaused: boolean = false
+
+  // Difficulty settings
+  private difficulty: Difficulty = 'normal'
+  private spawnIntervalMultiplier: number = 1.0
+  private anthillHpMultiplier: number = 1.0
+
+  // Timer
+  private gameTimer: number = 0 // in seconds
+  private finalTime: number = 0
 
   constructor() {
     super({ key: 'GameScene' })
@@ -85,6 +98,35 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  init(data: GameConfig) {
+    // Set difficulty from menu
+    this.difficulty = data?.difficulty || 'normal'
+
+    // Apply difficulty multipliers
+    switch (this.difficulty) {
+      case 'easy':
+        this.spawnIntervalMultiplier = 1.5  // Slower spawns
+        this.anthillHpMultiplier = 0.7       // Less HP
+        break
+      case 'hard':
+        this.spawnIntervalMultiplier = 0.7   // Faster spawns
+        this.anthillHpMultiplier = 1.5       // More HP
+        break
+      default: // normal
+        this.spawnIntervalMultiplier = 1.0
+        this.anthillHpMultiplier = 1.0
+    }
+
+    // Reset timer
+    this.gameTimer = 0
+    this.finalTime = 0
+    this.gameState = 'playing'
+    this.isPaused = false
+    this.bricks = []
+    this.ants = []
+    this.antHills = []
+  }
+
   create() {
     // Enable physics
     this.physics.world.setBounds(0, 0, this.game.config.width as number, this.game.config.height as number)
@@ -104,6 +146,9 @@ export class GameScene extends Phaser.Scene {
 
     // Initialize audio manager
     this.audioManager = new AudioManager(this)
+
+    // Start background music
+    this.audioManager.playBGM()
 
     // Initialize enclosure detector with game dimensions
     const gameWidth = this.game.config.width as number
@@ -160,6 +205,13 @@ export class GameScene extends Phaser.Scene {
 
     this.updateBrickDisplay()
 
+    // Create timer display (top right corner)
+    this.timerText = this.add.text(uiGameWidth - 16, 16, '00:00', {
+      fontSize: '24px',
+      color: '#ffffff'
+    })
+    this.timerText.setOrigin(1, 0) // Right-aligned
+
     // Spawn initial anthills at map edges
     this.spawnInitialAntHills()
 
@@ -190,6 +242,10 @@ export class GameScene extends Phaser.Scene {
     if (this.brickCooldown > 0) {
       this.brickCooldown -= deltaSeconds
     }
+
+    // Update game timer
+    this.gameTimer += deltaSeconds
+    this.updateTimerDisplay()
 
     // Handle brick placement (K key or right mouse click)
     if (Phaser.Input.Keyboard.JustDown(this.kKey) &&
@@ -439,17 +495,27 @@ export class GameScene extends Phaser.Scene {
 
     for (let i = 0; i < hillCount; i++) {
       const pos = positions[i]
-      const antHill = new AntHill(this, pos.x, pos.y, this.player, (ant: Ant) => {
-        this.ants.push(ant)
-        // Add collision with player
-        this.physics.add.overlap(
-          this.player.getSprite(),
-          ant.getSprite(),
-          () => {},
-          undefined,
-          this
-        )
-      }, this.effectsManager, this.audioManager)
+      const antHill = new AntHill(
+        this,
+        pos.x,
+        pos.y,
+        this.player,
+        (ant: Ant) => {
+          this.ants.push(ant)
+          // Add collision with player
+          this.physics.add.overlap(
+            this.player.getSprite(),
+            ant.getSprite(),
+            () => {},
+            undefined,
+            this
+          )
+        },
+        this.effectsManager,
+        this.audioManager,
+        this.spawnIntervalMultiplier,
+        this.anthillHpMultiplier
+      )
       this.antHills.push(antHill)
 
       // Add collision between player and anthill
@@ -610,10 +676,26 @@ export class GameScene extends Phaser.Scene {
     const gameWidth = this.game.config.width as number
     const gameHeight = this.game.config.height as number
 
-    const message = won ? 'VICTORY!\nAll anthills destroyed!' : 'DEFEAT!\nYou were overwhelmed...'
+    // Stop BGM
+    this.audioManager.stopBGM()
+
+    // Save final time
+    this.finalTime = this.gameTimer
+
+    // Format time
+    const minutes = Math.floor(this.finalTime / 60)
+    const seconds = Math.floor(this.finalTime % 60)
+    const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+
+    let message: string
+    if (won) {
+      message = `VICTORY!\nAll anthills destroyed!\n\nTime: ${timeStr}`
+    } else {
+      message = 'DEFEAT!\nYou were overwhelmed...'
+    }
     const color = won ? '#00ff00' : '#ff0000'
 
-    this.gameOverText = this.add.text(gameWidth / 2, gameHeight / 2, message, {
+    this.gameOverText = this.add.text(gameWidth / 2, gameHeight / 2 - 20, message, {
       fontSize: '48px',
       color: color,
       align: 'center'
@@ -621,11 +703,33 @@ export class GameScene extends Phaser.Scene {
     this.gameOverText.setOrigin(0.5)
 
     // Show restart hint
-    this.restartHintText = this.add.text(gameWidth / 2, gameHeight / 2 + 80, 'Press R to Restart', {
+    this.restartHintText = this.add.text(gameWidth / 2, gameHeight / 2 + 90, 'Press R to Restart', {
       fontSize: '24px',
       color: '#ffffff'
     })
     this.restartHintText.setOrigin(0.5)
+
+    // Show menu button
+    this.menuHintText = this.add.text(gameWidth / 2, gameHeight / 2 + 130, 'Return to Menu', {
+      fontSize: '20px',
+      color: '#ffffff',
+      backgroundColor: '#555555',
+      padding: { x: 12, y: 6 }
+    })
+    this.menuHintText.setOrigin(0.5)
+    this.menuHintText.setInteractive({ useHandCursor: true })
+
+    this.menuHintText.on('pointerover', () => {
+      this.menuHintText?.setStyle({ color: '#555555', backgroundColor: '#ffffff' })
+    })
+
+    this.menuHintText.on('pointerout', () => {
+      this.menuHintText?.setStyle({ color: '#ffffff', backgroundColor: '#555555' })
+    })
+
+    this.menuHintText.on('pointerdown', () => {
+      this.returnToMenu()
+    })
 
     // Play corresponding sound
     if (won) {
@@ -713,20 +817,65 @@ export class GameScene extends Phaser.Scene {
 
     if (this.isPaused) {
       // Show paused text
-      this.pausedText = this.add.text(gameWidth / 2, gameHeight / 2, 'PAUSED', {
+      this.pausedText = this.add.text(gameWidth / 2, gameHeight / 2 - 30, 'PAUSED', {
         fontSize: '64px',
         color: '#ffffff',
         backgroundColor: '#000000',
         padding: { x: 30, y: 20 }
       })
       this.pausedText.setOrigin(0.5)
+
+      // Show return to menu button
+      this.pauseMenuButton = this.add.text(gameWidth / 2, gameHeight / 2 + 60, 'Return to Menu', {
+        fontSize: '24px',
+        color: '#ffffff',
+        backgroundColor: '#555555',
+        padding: { x: 16, y: 8 }
+      })
+      this.pauseMenuButton.setOrigin(0.5)
+      this.pauseMenuButton.setInteractive({ useHandCursor: true })
+
+      this.pauseMenuButton.on('pointerover', () => {
+        this.pauseMenuButton?.setStyle({ color: '#555555', backgroundColor: '#ffffff' })
+      })
+
+      this.pauseMenuButton.on('pointerout', () => {
+        this.pauseMenuButton?.setStyle({ color: '#ffffff', backgroundColor: '#555555' })
+      })
+
+      this.pauseMenuButton.on('pointerdown', () => {
+        this.returnToMenu()
+      })
     } else {
       // Remove paused text
       if (this.pausedText) {
         this.pausedText.destroy()
         this.pausedText = null
       }
+      // Remove menu button
+      if (this.pauseMenuButton) {
+        this.pauseMenuButton.destroy()
+        this.pauseMenuButton = null
+      }
     }
+  }
+
+  /**
+   * Return to main menu
+   */
+  private returnToMenu() {
+    // Stop BGM
+    this.audioManager.stopBGM()
+    this.scene.start('MenuScene')
+  }
+
+  /**
+   * Update timer display
+   */
+  private updateTimerDisplay() {
+    const minutes = Math.floor(this.gameTimer / 60)
+    const seconds = Math.floor(this.gameTimer % 60)
+    this.timerText.setText(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`)
   }
 
   /**
