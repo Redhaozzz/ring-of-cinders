@@ -34,6 +34,8 @@ export class GameScene extends Phaser.Scene {
 
   // UI
   private hpText!: Phaser.GameObjects.Text
+  private brickCountText!: Phaser.GameObjects.Text
+  private cooldownText!: Phaser.GameObjects.Text
   private gameOverText: Phaser.GameObjects.Text | null = null
   private restartHintText: Phaser.GameObjects.Text | null = null
   private pausedText: Phaser.GameObjects.Text | null = null
@@ -117,6 +119,25 @@ export class GameScene extends Phaser.Scene {
     })
     this.updateHpDisplay()
 
+    // Create brick count display (bottom right corner)
+    const uiGameWidth = this.game.config.width as number
+    const uiGameHeight = this.game.config.height as number
+
+    this.brickCountText = this.add.text(uiGameWidth - 16, uiGameHeight - 60, '', {
+      fontSize: '24px',
+      color: '#ffffff'
+    })
+    this.brickCountText.setOrigin(1, 0) // Right-aligned
+
+    // Create cooldown timer display (below brick count)
+    this.cooldownText = this.add.text(uiGameWidth - 16, uiGameHeight - 30, '', {
+      fontSize: '18px',
+      color: '#cccccc'
+    })
+    this.cooldownText.setOrigin(1, 0) // Right-aligned
+
+    this.updateBrickDisplay()
+
     // Spawn initial anthills at map edges
     this.spawnInitialAntHills()
   }
@@ -185,6 +206,9 @@ export class GameScene extends Phaser.Scene {
 
     // Update HP display
     this.updateHpDisplay()
+
+    // Update brick display
+    this.updateBrickDisplay()
 
     // Check win/lose conditions
     this.checkGameOver()
@@ -428,6 +452,64 @@ export class GameScene extends Phaser.Scene {
     const hp = this.player.getHp()
     const maxHp = this.player.getMaxHp()
     this.hpText.setText(`HP: ${hp}/${maxHp}`)
+  }
+
+  /**
+   * Update brick count and cooldown display
+   */
+  private updateBrickDisplay() {
+    const currentBricks = this.bricks.length
+    const maxBricks = this.MAX_BRICKS
+    const remainingBricks = maxBricks - currentBricks
+
+    // Update brick count with brick emoji
+    this.brickCountText.setText(`🧱 ${remainingBricks}/${maxBricks}`)
+
+    // Change color based on brick availability
+    if (remainingBricks === 0) {
+      // No bricks available - red and flashing
+      this.brickCountText.setColor('#ff4444')
+
+      // Add flashing effect when no bricks available
+      if (!this.brickCountText.getData('flashing')) {
+        this.brickCountText.setData('flashing', true)
+        this.tweens.add({
+          targets: this.brickCountText,
+          alpha: { from: 1, to: 0.3 },
+          duration: 500,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut'
+        })
+      }
+    } else if (remainingBricks <= 2) {
+      // Low bricks - orange warning
+      this.brickCountText.setColor('#ff8844')
+      this.stopFlashing()
+    } else {
+      // Normal amount - white
+      this.brickCountText.setColor('#ffffff')
+      this.stopFlashing()
+    }
+
+    // Update cooldown timer display
+    if (this.brickCooldown > 0) {
+      this.cooldownText.setText(`Cooldown: ${this.brickCooldown.toFixed(1)}s`)
+      this.cooldownText.setVisible(true)
+    } else {
+      this.cooldownText.setVisible(false)
+    }
+  }
+
+  /**
+   * Stop flashing effect on brick count text
+   */
+  private stopFlashing() {
+    if (this.brickCountText.getData('flashing')) {
+      this.brickCountText.setData('flashing', false)
+      this.tweens.killTweensOf(this.brickCountText)
+      this.brickCountText.setAlpha(1)
+    }
   }
 
   /**
