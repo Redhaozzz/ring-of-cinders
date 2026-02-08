@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { Ant } from './Ant'
 import type { Player } from './Player'
 import { EffectsManager } from '../effects/VisualEffects'
+import { AudioManager } from '../systems/AudioManager'
 
 export class AntHill {
   private scene: Phaser.Scene
@@ -13,6 +14,7 @@ export class AntHill {
   private readonly SPAWN_INTERVAL: number = 2.5 // seconds (2-3 seconds)
   private onAntSpawned?: (ant: Ant) => void
   private effectsManager: EffectsManager | null = null
+  private audioManager: AudioManager | null = null
 
   constructor(
     scene: Phaser.Scene,
@@ -20,12 +22,14 @@ export class AntHill {
     y: number,
     player: Player,
     onAntSpawned?: (ant: Ant) => void,
-    effectsManager?: EffectsManager
+    effectsManager?: EffectsManager,
+    audioManager?: AudioManager
   ) {
     this.scene = scene
     this.player = player
     this.onAntSpawned = onAntSpawned
     this.effectsManager = effectsManager || null
+    this.audioManager = audioManager || null
 
     // Create anthill sprite using anthill-states spritesheet
     // Scale from 256px to ~48px (scale = 0.1875)
@@ -109,6 +113,11 @@ export class AntHill {
 
   private die() {
     this.isDead = true
+
+    // Play anthill destroy sound
+    if (this.audioManager) {
+      this.audioManager.playAnthillDestroy()
+    }
 
     if (this.effectsManager) {
       // Add death effect and destroy sprite when effect completes

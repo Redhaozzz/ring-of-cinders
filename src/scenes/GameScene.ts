@@ -32,6 +32,9 @@ export class GameScene extends Phaser.Scene {
   // Audio system
   private audioManager!: AudioManager
 
+  // Visual effects
+  private furnaceOverlay: Phaser.GameObjects.Rectangle | null = null
+
   // UI
   private hpText!: Phaser.GameObjects.Text
   private brickCountText!: Phaser.GameObjects.Text
@@ -240,6 +243,9 @@ export class GameScene extends Phaser.Scene {
     // Set cooldown
     this.brickCooldown = this.BRICK_COOLDOWN_TIME
 
+    // Play brick place sound
+    this.audioManager.playBrickPlace()
+
     const playerSprite = this.player.getSprite()
     const facing = this.player.getFacing() // Access facing direction from player
 
@@ -314,7 +320,18 @@ export class GameScene extends Phaser.Scene {
   private activateFurnaceMode() {
     if (!this.activeEnclosures?.hasEnclosure) return
 
-    // Make boundary bricks glow
+    // Play ignite sound
+    this.audioManager.playIgnite()
+
+    // Create red screen overlay
+    const gameWidth = this.game.config.width as number
+    const gameHeight = this.game.config.height as number
+
+    this.furnaceOverlay = this.add.rectangle(0, 0, gameWidth, gameHeight, 0xff3333, 0.15)
+    this.furnaceOverlay.setOrigin(0, 0)
+    this.furnaceOverlay.setDepth(100) // Above most elements but below UI
+
+    // Make boundary bricks glow with enhanced effect
     const boundaryPositions = this.activeEnclosures.enclosureBoundary
 
     for (const brick of this.bricks) {
@@ -325,8 +342,23 @@ export class GameScene extends Phaser.Scene {
 
       if (isInBoundary) {
         brick.setGlowing(true)
+
+        // Add pulsing tween for enhanced glow
+        const brickSprite = brick.getSprite()
+        this.tweens.add({
+          targets: brickSprite,
+          scaleX: { from: 0.125, to: 0.14 }, // Pulse scale
+          scaleY: { from: 0.125, to: 0.14 },
+          duration: 800,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut'
+        })
       }
     }
+
+    // Camera shake effect
+    this.cameras.main.shake(100, 0.01)
 
     // Reset damage timer
     this.furnaceDamageTimer = 0
@@ -336,9 +368,20 @@ export class GameScene extends Phaser.Scene {
    * Deactivate furnace visual effects
    */
   private deactivateFurnaceMode() {
-    // Turn off all brick glow effects
+    // Remove screen overlay
+    if (this.furnaceOverlay) {
+      this.furnaceOverlay.destroy()
+      this.furnaceOverlay = null
+    }
+
+    // Turn off all brick glow effects and stop tweens
     for (const brick of this.bricks) {
       brick.setGlowing(false)
+      const brickSprite = brick.getSprite()
+
+      // Stop all tweens on this brick and reset scale
+      this.tweens.killTweensOf(brickSprite)
+      brickSprite.setScale(0.125) // Reset to normal scale
     }
 
     // Reset damage timer
@@ -406,7 +449,7 @@ export class GameScene extends Phaser.Scene {
           undefined,
           this
         )
-      }, this.effectsManager)
+      }, this.effectsManager, this.audioManager)
       this.antHills.push(antHill)
 
       // Add collision between player and anthill
@@ -460,8 +503,16 @@ export class GameScene extends Phaser.Scene {
         if (angle < start) angle += Math.PI * 2
 
         if (angle >= start && angle <= end) {
-          ant.takeDamage(1)
+          const killed = ant.takeDamage(1)
           this.audioManager.playAttack()
+
+          // Screen shake on hit
+          this.cameras.main.shake(50, 0.002)
+
+          // If ant was killed, add extra screen shake
+          if (killed) {
+            this.cameras.main.shake(100, 0.003)
+          }
         }
       }
     }
