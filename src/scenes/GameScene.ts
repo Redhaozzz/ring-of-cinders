@@ -159,6 +159,9 @@ export class GameScene extends Phaser.Scene {
 
     // Spawn initial anthills at map edges
     this.spawnInitialAntHills()
+
+    // Show tutorial for first-time players
+    this.showTutorial()
   }
 
   update(_time: number, delta: number) {
@@ -673,5 +676,101 @@ export class GameScene extends Phaser.Scene {
         this.pausedText = null
       }
     }
+  }
+
+  /**
+   * Show tutorial overlay for first-time players
+   */
+  private showTutorial() {
+    // Check if tutorial has been shown before
+    const tutorialShown = localStorage.getItem("roc-tutorial-shown")
+    if (tutorialShown === "1") {
+      return
+    }
+
+    const gameWidth = this.game.config.width as number
+    const gameHeight = this.game.config.height as number
+
+    // Create tutorial container for easy management
+    const tutorialContainer = this.add.container(0, 0)
+
+    // Create semi-transparent black overlay
+    const overlay = this.add.rectangle(0, 0, gameWidth, gameHeight, 0x000000, 0.7)
+    overlay.setOrigin(0, 0)
+    tutorialContainer.add(overlay)
+
+    // Create tutorial text lines
+    const tutorialLines = [
+      "WASD - 移动",
+      "J / 左键 - 攻击",
+      "K / 右键 - 放砖",
+      "",
+      "(按任意键继续)"
+    ]
+
+    const tutorialTexts: Phaser.GameObjects.Text[] = []
+    const lineHeight = 40
+    const startY = gameHeight / 2 - (tutorialLines.length * lineHeight) / 2
+
+    tutorialLines.forEach((line, index) => {
+      const text = this.add.text(gameWidth / 2, startY + index * lineHeight, line, {
+        fontSize: '24px',
+        color: '#ffffff',
+        align: 'center'
+      })
+      text.setOrigin(0.5)
+      tutorialTexts.push(text)
+      tutorialContainer.add(text)
+    })
+
+    // Set up any-key listener to skip tutorial
+    const skipTutorial = () => {
+      tutorialContainer.destroy()
+      // Mark tutorial as shown
+      localStorage.setItem("roc-tutorial-shown", "1")
+      // Show objective hint after tutorial
+      this.showObjectiveHint()
+    }
+
+    // Listen for any keyboard input
+    const anyKeyHandler = () => {
+      skipTutorial()
+      this.input.keyboard!.off('keydown', anyKeyHandler)
+    }
+    this.input.keyboard!.on('keydown', anyKeyHandler)
+
+    // Auto-dismiss after 3 seconds
+    this.time.delayedCall(3000, () => {
+      if (tutorialContainer.active) {
+        skipTutorial()
+        this.input.keyboard!.off('keydown', anyKeyHandler)
+      }
+    })
+  }
+
+  /**
+   * Show objective hint after tutorial
+   */
+  private showObjectiveHint() {
+    const gameWidth = this.game.config.width as number
+
+    // Create objective hint text
+    const objectiveText = this.add.text(gameWidth / 2, 50, '🔥 目标：消灭所有蚁穴！', {
+      fontSize: '28px',
+      color: '#ffaa00',
+      fontStyle: 'bold'
+    })
+    objectiveText.setOrigin(0.5)
+
+    // Fade out after 2 seconds
+    this.tweens.add({
+      targets: objectiveText,
+      alpha: 0,
+      duration: 500,
+      delay: 2000,
+      onComplete: () => {
+        objectiveText.destroy()
+      }
+    })
   }
 }
